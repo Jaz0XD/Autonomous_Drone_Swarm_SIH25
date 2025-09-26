@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Swarm Operator Console - Prototype</title>
+
+  <!-- Bootstrap (CSS) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    body, html { height:100%; margin:0; }
+    #map { height: 70vh; min-height: 480px; }
+    .sidebar { height: 70vh; overflow:auto; }
+    .drone-item { cursor: pointer; }
+    .waypoint-marker { background: rgba(0,123,255,0.2); border-radius: 6px; padding:6px; }
+    .top-bar { padding:10px; background:#f8f9fa; border-bottom:1px solid #eee; }
+    .small-muted { font-size:0.85rem; color:#666; }
+    .badge-role { font-size:.75rem; }
+    .log-box { height:18vh; overflow:auto; background:#111; color:#eee; padding:8px; font-family:monospace; }
+  </style>
+</head>
+<body>
+  <!-- Login Modal (simple) -->
+  <div id="loginOverlay" style="position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; display:flex; align-items:center; justify-content:center;">
+    <div class="card p-4" style="min-width:320px;">
+      <h5 class="mb-3">Operator Login (Demo)</h5>
+      <div class="mb-2"><input id="inputUser" class="form-control" placeholder="Username"></div>
+      <div class="mb-2"><input id="inputPass" type="password" class="form-control" placeholder="Password"></div>
+      <div class="text-end">
+        <button id="btnLogin" class="btn btn-primary">Login</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Bar -->
+  <div class="top-bar d-flex justify-content-between align-items-center">
+    <div>
+      <strong>Swarm Operator Console</strong>
+      <span class="small-muted ms-2">Prototype • Hybrid Centralized Control</span>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <div class="input-group input-group-sm me-2">
+        <span class="input-group-text">REST</span>
+        <input id="restBase" class="form-control" value="http://localhost:8080">
+      </div>
+      <div class="input-group input-group-sm me-2">
+        <span class="input-group-text">WS</span>
+        <input id="wsUrl" class="form-control" value="ws://localhost:8080">
+      </div>
+      <div class="form-check form-switch me-2">
+        <input class="form-check-input" type="checkbox" id="simulateToggle" checked>
+        <label class="form-check-label small-muted" for="simulateToggle">Simulate Drones</label>
+      </div>
+      <button id="btnConnect" class="btn btn-success btn-sm">Connect</button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="container-fluid p-3">
+    <div class="row g-3">
+      <!-- Left: Drone List & Controls -->
+      <div class="col-md-3">
+        <div class="card sidebar p-2">
+          <h6>Connected Drones <span id="droneCount" class="badge bg-secondary ms-1">0</span></h6>
+          <div id="droneList" class="mb-2"></div>
+
+          <h6>Roles</h6>
+          <select id="roleSelect" class="form-select mb-2">
+            <option>INTERCEPTOR</option>
+            <option>ENCIRCLER</option>
+            <option>SCOUT</option>
+            <option>RELAY</option>
+            <option>LEADER</option>
+          </select>
+
+          <div class="d-grid gap-2 mb-2">
+            <button id="btnAssignRole" class="btn btn-outline-primary btn-sm">Assign Selected Role</button>
+            <button id="btnAutoAssign" class="btn btn-primary btn-sm">Auto-Assign Waypoints</button>
+            <button id="btnStartMission" class="btn btn-danger btn-sm">Start Mission</button>
+          </div>
+
+          <h6>Waypoints</h6>
+          <div id="waypointList" style="max-height:220px; overflow:auto;"></div>
+
+          <hr/>
+          <div class="small-muted mb-2">Mission Settings</div>
+          <div class="mb-2">
+            <label class="form-label small-muted">Default Altitude (m)</label>
+            <input id="defaultAlt" type="number" class="form-control form-control-sm" value="60">
+          </div>
+          <div><small class="text-muted">Tip: Click map to add waypoints. Altitude editable in waypoint box.</small></div>
+        </div>
+      </div>
+
+      <!-- Center: Map -->
+      <div class="col-md-6">
+        <div id="map" class="card"></div>
+      </div>
+
+      <!-- Right: Mission Preview / Logs -->
+      <div class="col-md-3">
+        <div class="card p-2 sidebar">
+          <h6>Mission Preview</h6>
+          <div id="missionPreview" style="min-height:180px;"></div>
+          <hr/>
+          <h6>Connection & Commands</h6>
+          <div class="mb-2">
+            <small class="small-muted">Swarm Key (demo)</small>
+            <input id="swarmKey" class="form-control form-control-sm" placeholder="Optional secret key">
+          </div>
+          <div class="d-grid gap-2">
+            <button id="btnPing" class="btn btn-outline-secondary btn-sm">Ping Drones</button>
+            <button id="btnAbort" class="btn btn-outline-danger btn-sm">Abort Mission</button>
+          </div>
+          <hr/>
+          <h6>Logs</h6>
+          <div id="logBox" class="log-box" aria-hidden="false"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Required JS libs -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.4.0/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+  // ---------- App state ----------
+  const state = {
+    user: null,
+    ws: null,
+    restBase: () => document.getElementById('restBase').value,
+    wsUrl: () => document.getElementById('wsUrl').value,
+    simulate: () => document.getElementById('simulateToggle').checked,
+    drones: {},        // id -> {id, pos, battery, role, assignedWaypoint}
+    waypoints: [],     // {id, lat, lng, alt}
+    selectedDrone: null
+  };
+
+  // ---------- Utilities ----------
+  function log(msg) {
+    const box = document.getElementById('logBox');
+    const ts = new Date().toISOString().replace('T',' ').slice(0,19);
+    box.innerText = ts + '  ' + msg + '\n' + box.innerText;
+  }
+  function uid(prefix='w') { return prefix + Math.random().toString(36).slice(2,9); }
+
+  // ---------- Map ----------
+  const map = L.map('map').setView([20.5937,78.9629], 5); // India center
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+  const droneLayer = L.layerGroup().addTo(map);
+  const waypointLayer = L.layerGroup().addTo(map);
+
+  // add waypoint on click
+  map.on('click', function(e) {
+    const id = uid('wp');
+    const alt = parseInt(document.getElementById('defaultAlt').value || 60);
+    const wp = { id, lat: e.latlng.lat, lng: e.latlng.lng, alt };
+    state.waypoints.push(wp);
+    renderWaypoints();
+    updateMissionPreview();
+    log('Waypoint added ' + id + ' at ' + wp.lat.toFixed(4) + ',' + wp.lng.toFixed(4));
+  });
+
+  // ---------- Render functions ----------
+  function renderDrones() {
+    const listEl = document.getElementById('droneList');
+    listEl.innerHTML = '';
+    droneLayer.clearLayers();
+    const ids = Object.keys(state.drones);
+    document.getElementById('droneCount').innerText = ids.length;
+    ids.forEach(id => {
+      const d = state.drones[id];
+      const el = document.createElement('div');
+      el.className = 'p-2 border rounded mb-1 drone-item';
+      el.onclick = () => { state.selectedDrone = id; highlightDrone(id); };
+      el.innerHTML = '<div class="d-flex justify-content-between"><div><strong>' + id + '</strong><div class="small-muted">Role: <span class="badge bg-info badge-role">'+(d.role||'NONE')+'</span></div></div><div class="text-end small-muted">Batt:'+ (d.battery||'--') +'%</div></div>';
+      listEl.appendChild(el);
+
+      if (d.pos) {
+        const marker = L.circleMarker([d.pos.lat, d.pos.lng], { radius:8, color: d.role === 'LEADER' ? 'red' : 'green' }).addTo(droneLayer);
+        marker.bindPopup(`<b>${id}</b><br/>role: ${d.role||'NONE'}<br/>bat:${d.battery||'--'}%`);
+      }
+    });
+  }
+
+  function renderWaypoints() {
+    waypointLayer.clearLayers();
+    const wpList = document.getElementById('waypointList');
+    wpList.innerHTML = '';
+    state.waypoints.forEach((wp, i) => {
+      const el = document.createElement('div');
+      el.className = 'p-2 border rounded mb-1';
+      el.innerHTML = `<div><strong>WP ${i+1}</strong> <div class="small-muted">${wp.lat.toFixed(4)}, ${wp.lng.toFixed(4)}</div></div>
+      <div class="mt-2"><label class="form-label small-muted">Alt (m)</label><input data-wp="${wp.id}" class="form-control form-control-sm wp-alt" value="${wp.alt}" /></div>
+      <div class="mt-2"><button data-del="${wp.id}" class="btn btn-sm btn-outline-danger">Delete</button></div>`;
+      wpList.appendChild(el);
+
+      const marker = L.marker([wp.lat, wp.lng], { draggable:false }).addTo(waypointLayer);
+      marker.bindPopup(`<b>WP ${i+1}</b><br/>Alt: ${wp.alt}m`);
+    });
+
+    // alt change listeners
+    document.querySelectorAll('.wp-alt').forEach(inp => {
+      inp.onchange = (ev) => {
+        const id = ev.target.getAttribute('data-wp');
+        const wp = state.waypoints.find(w => w.id === id);
+        if (wp) { wp.alt = parseInt(ev.target.value||0); renderWaypoints(); updateMissionPreview(); }
+      };
+    });
+    document.querySelectorAll('[data-del]').forEach(btn => {
+      btn.onclick = (ev) => {
+        const id = ev.target.getAttribute('data-del');
+        state.waypoints = state.waypoints.filter(w => w.id !== id);
+        renderWaypoints(); updateMissionPreview();
+      };
+    });
+  }
+
+  function updateMissionPreview() {
+    const el = document.getElementById('missionPreview');
+    if (state.waypoints.length === 0) { el.innerHTML = '<div class="small-muted">No waypoints</div>'; return; }
+    let html = '<ol>';
+    state.waypoints.forEach((wp, i) => {
+      html += `<li>WP ${i+1}: ${wp.lat.toFixed(4)}, ${wp.lng.toFixed(4)}, alt ${wp.alt}m</li>`;
+    });
+    html += '</ol>';
+    el.innerHTML = html;
+  }
+
+  function highlightDrone(id) {
+    // simple visual (not implemented advanced)
+    log('Selected drone: ' + id);
+  }
+
+  // ---------- WebSocket & REST ----------
+  let ws = null;
+
+  document.getElementById('btnConnect').onclick = async () => {
+    const simulate = state.simulate();
+    if (simulate) {
+      startSimulation();
+      log('Simulation mode ON');
+      return;
+    }
+    // REST ping
+    try {
+      const base = state.restBase();
+      const r = await axios.get(base + '/drones');
+      // populate drones list
+      r.data.forEach(d => {
+        state.drones[d.id] = { id:d.id, pos:d.pos || null, battery:d.battery || null, role:d.role || null };
+      });
+      renderDrones(); updateMissionPreview();
+    } catch(e) {
+      log('REST fetch failed: ' + e.message);
+    }
+
+    // WebSocket
+    try {
+      const url = state.wsUrl();
+      ws = new WebSocket(url);
+      ws.onopen = () => { log('WS connected'); };
+      ws.onmessage = (evt) => {
+        try {
+          const data = JSON.parse(evt.data);
+          handleWsMessage(data);
+        } catch(e) { log('Bad WS msg'); }
+      };
+      ws.onclose = () => { log('WS closed'); };
+    } catch(e) { log('WS error ' + e.message); }
+  };
+
+  function handleWsMessage(data) {
+    if (!data.type) return;
+    if (data.type === 'JOIN_REQ') {
+      // not expected
+    } else if (data.type === 'HEARTBEAT') {
+      const id = data.id;
+      state.drones[id] = state.drones[id] || { id };
+      state.drones[id].pos = data.pos;
+      state.drones[id].battery = data.battery;
+      state.drones[id].role = state.drones[id].role || null;
+      renderDrones();
+    } else if (data.type === 'JOIN_RESP') {
+      log('WS JOIN_RESP: ' + JSON.stringify(data));
+    } else {
+      log('WS msg: ' + JSON.stringify(data));
+    }
+  }
+
+  // ---------- Simulated drones for demo ----------
+  let simInterval = null;
+  function startSimulation() {
+    // create 4 simulated drones around map center
+    state.drones = {};
+    const center = map.getCenter();
+    for (let i=0;i<4;i++) {
+      const id = 'DRONE-' + String(i+1).padStart(2,'0');
+      const lat = center.lat + (Math.random()-0.5) * 0.2;
+      const lng = center.lng + (Math.random()-0.5) * 0.2;
+      state.drones[id] = { id, pos:{lat,lng,alt:60}, battery: 80 - i*5, role: i===0 ? 'LEADER' : 'SCOUT' };
+    }
+    renderDrones();
+
+    if (simInterval) clearInterval(simInterval);
+    simInterval = setInterval(() => {
+      // wobble drones
+      Object.values(state.drones).forEach(d => {
+        d.pos.lat += (Math.random()-0.5) * 0.0005;
+        d.pos.lng += (Math.random()-0.5) * 0.0005;
+        d.battery = Math.max(10, d.battery - Math.random()*0.5);
+      });
+      renderDrones();
+    }, 800);
+  }
+
+  // ---------- Auto-assign algorithm (greedy nearest) ----------
+  document.getElementById('btnAutoAssign').onclick = () => {
+    if (state.waypoints.length === 0) { alert('Add waypoints on the map first'); return; }
+    const droneIds = Object.keys(state.drones);
+    if (droneIds.length === 0) { alert('No drones connected'); return; }
+    // build list of free drones
+    const dronesArr = droneIds.map(id => state.drones[id]);
+    // simple greedy: for each waypoint choose nearest drone not assigned yet
+    const assignments = [];
+    const used = new Set();
+    state.waypoints.forEach((wp,i) => {
+      let best=null, bestD=1e12, bestId=null;
+      dronesArr.forEach(d => {
+        if (used.has(d.id)) return;
+        const dx = (d.pos.lat - wp.lat);
+        const dy = (d.pos.lng - wp.lng);
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < bestD) { bestD = dist; best = d; bestId = d.id; }
+      });
+      if (bestId) {
+        assignments.push({ droneId: bestId, waypointIndex: i, role: state.drones[bestId].role || 'SCOUT' });
+        used.add(bestId);
+        state.drones[bestId].assignedWaypoint = i;
+      }
+    });
+    // show results in UI
+    renderDrones();
+    updateMissionPreview();
+    log('Auto-assigned ' + assignments.length + ' waypoints');
+    // store last assignments for sending
+    window._lastAssignments = assignments;
+  };
+
+  // assign role button
+  document.getElementById('btnAssignRole').onclick = () => {
+    if (!state.selectedDrone) { alert('Select a drone from list'); return; }
+    const role = document.getElementById('roleSelect').value;
+    if (state.drones[state.selectedDrone]) {
+      state.drones[state.selectedDrone].role = role;
+      renderDrones();
+      log('Assigned role ' + role + ' to ' + state.selectedDrone);
+    }
+  };
+
+  // Start mission - send to server or simulate action
+  document.getElementById('btnStartMission').onclick = async () => {
+    const assignments = window._lastAssignments || [];
+    const waypoints = state.waypoints.map(w => ({ lat:w.lat, lng:w.lng, alt:w.alt }));
+    if (state.simulate()) {
+      log('Simulating mission start: ' + JSON.stringify({waypoints, assignments}));
+      // simulate drones acknowledging and moving to assigned waypoints
+      assignments.forEach(a => {
+        const d = state.drones[a.droneId];
+        if (d && typeof a.waypointIndex === 'number') {
+          const wp = state.waypoints[a.waypointIndex];
+          d.pos = { lat: wp.lat + (Math.random()-0.5)*0.0002, lng: wp.lng + (Math.random()-0.5)*0.0002, alt: wp.alt };
+        }
+      });
+      renderDrones();
+      log('Mission executed in simulation.');
+      return;
+    }
+
+    // send to backend via REST /mission
+    try {
+      const base = state.restBase();
+      const body = { waypoints, assignments };
+      const r = await axios.post(base + '/mission', body);
+      log('Mission posted: ' + JSON.stringify(r.data));
+    } catch(e) {
+      log('Mission POST failed: ' + e.message);
+    }
+
+    // optionally send WS commands
+    assignments.forEach(a => {
+      const d = state.drones[a.droneId];
+      if (d && d.ws && d.ws.readyState === 1) {
+        const cmd = { type:'ASSIGN_WAYPOINTS', cmd_id: 'cmd-' + Date.now(), mission_id:'M1', waypoints: [ state.waypoints[a.waypointIndex] ], role: a.role };
+        d.ws.send(JSON.stringify(cmd));
+      } else if (ws && ws.readyState === 1) {
+        // send via central WS to drone
+        ws.send(JSON.stringify({ type:'ASSIGN_WAYPOINTS', target: a.droneId, waypoints:[ state.waypoints[a.waypointIndex] ], role:a.role }));
+      }
+    });
+  };
+
+  document.getElementById('btnPing').onclick = () => {
+    if (state.simulate()) {
+      log('Ping simulated: ' + Object.keys(state.drones).length + ' drones');
+      return;
+    }
+    if (!ws || ws.readyState !== 1) { log('WS not connected'); return; }
+    ws.send(JSON.stringify({ type:'PING', ts:Date.now() }));
+  };
+
+  document.getElementById('btnAbort').onclick = () => {
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type:'ABORT' }));
+    log('Abort command sent');
+  };
+
+  // login flow
+  document.getElementById('btnLogin').onclick = () => {
+    const user = document.getElementById('inputUser').value || 'operator';
+    state.user = user;
+    document.getElementById('loginOverlay').style.display = 'none';
+    log('Logged in as ' + user);
+  };
+
+  // initial render
+  renderWaypoints();
+  updateMissionPreview();
+
+  </script>
+</body>
+</html>

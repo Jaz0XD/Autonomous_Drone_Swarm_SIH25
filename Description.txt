@@ -1,0 +1,38 @@
+Background
+
+Modern armed conflicts increasingly involve the deployment of autonomous drones for surveillance, reconnaissance, and offensive operations. Currently, most anti-drone strategies rely on traditional Air Defence systems or Electronic Warfare techniques such as jamming. However, these methods may be limited in effectiveness, scalability, or cost. An alternative is to use autonomous drone swarms to counter adversarial drone swarms, leveraging decentralized coordination, adaptive behaviour, and real-time decision-making to neutralize threats more efficiently.
+
+Detailed Description
+
+To develop an effective solution for autonomous swarm-based drone counter engagement, the following assumptions and requirements must be considered:
+
+1. Armament Capability: Each drone is with armament capability. It is to be assumed that the adversary's drones are also similarly armed.
+
+2. Environmental Perception: Drones must be equipped with appropriate sensors (e.g., Radar, LiDAR, Vision systems) to detect and track other drones within their operational vicinity. Additionally, drones should be able to classify targets as friendly or hostile based on sensor inputs and identification protocols.
+
+3. Swarm Coordination Algorithm: A robust and efficient algorithm is required to coordinate the swarm in real time. This algorithm should enable autonomous drones to collaboratively execute efficient manoeuvres for engaging hostile drones and optimise the overall effectiveness of the swarm in tackling threat from hostile drones. Effectiveness means protecting ground assets and minimizing loss of friendly drones.
+
+The primary objective of this problem is to develop a decentralized swarm manoeuvre algorithm for autonomous drones operating in a protective role. The algorithm should enable drones to collectively execute swarming manoeuvres—swarming means quickly bringing more forces together against a smaller enemy to gain an advantage, while staying away from battles where the enemy has more troops.
+
+The protective drone swarm's mission is to protect designated ground assets from hostile drone swarms. Therefore, the algorithm must ensure that no enemy drone with ground attack capabilities* is left unattended** if it is within a threatening range*** of any friendly asset. Prioritization and dynamic threat assessment are critical.
+
+Given the inherent complexity and scalability challenges of centralized control, the swarm must operate in a distributed and autonomous manner. The algorithm is to be embedded in each drone individually, enabling local decision-making without reliance on a central controller. While it may be assumed that drones possess inter-drone and drone-to-ground communication capabilities, the algorithm must be designed to function effectively even in the complete absence of communication. Communication, if available, may be used to enhance performance but should not be a dependency.
+
+Expected Solution
+
+The expected outcome is a swarm control algorithm that enables friendly autonomous drones to collaboratively engage and neutralize an adversarial drone swarm using effective swarming manoeuvre. The algorithm must prioritize the protection of designated ground assets, ensuring that no enemy drone capable of attacking ground targets is left unattended within a threatening range.
+
+The solution should be decentralized in nature, allowing each drone to operate autonomously based on its local perception and on-board intelligence. While limited communication between drones and with the ground station can be assumed to be available, the algorithm must not be dependent on continuous communication for core functionality. It should demonstrate robust and satisfactory performance even in communication-denied or degraded environments.
+
+To validate the solution’s effectiveness, a stochastic simulation framework must be implemented to evaluate the algorithm through executions across a diverse set of scenarios and each scenario being executed multiple times. Furthermore, a user-friendly graphical user interface (GUI) is required to facilitate visual representation and interaction with the simulation results. (For Technical Specifications of Drone Refer Table)
+
+*Ground Attack Capabilities—
+Enemy drones are assumed to be of two types.
+1. Drones armed with air to air weapon, which will be a threat to friendly drones.
+2. Drones with ground attack capability.
+
+**Left Unattended—
+An enemy drone is unattended if there is no friendly drone either in firing range or in a position to intercept on its path to possible ground target.
+
+***Threatening Range—
+Threatening range can be defined as 10 times the speed of drone. Because if a drone with ground attacking capability is less than 10 seconds away from ground asset then there may not be sufficient time to intercept and neutralize it.
