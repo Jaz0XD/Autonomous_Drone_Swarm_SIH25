@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Swarm Mission Planner — Local UI</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <style>
+      :root {
+        --bg: #0f1724;
+        --panel: #0b1220;
+        --accent: #06b6d4;
+        --muted: #94a3b8;
+        --white: #e6eef8;
+      }
+      html,
+      body,
+      #app {
+        height: 100%;
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+          Roboto, "Helvetica Neue", Arial;
+      }
+      body {
+        background: linear-gradient(180deg, #071027 0%, #06121a 100%);
+        color: var(--white);
+      }
+      .app {
+        display: flex;
+        height: 100vh;
+        gap: 12px;
+        padding: 12px;
+        box-sizing: border-box;
+      }
+      .left {
+        width: 360px;
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.02),
+          rgba(255, 255, 255, 0.01)
+        );
+        border-radius: 8px;
+        padding: 12px;
+        box-shadow: 0 6px 18px rgba(2, 6, 23, 0.6);
+      }
+      .map-wrap {
+        flex: 1;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 6px 18px rgba(2, 6, 23, 0.6);
+      }
+      #map {
+        height: 100%;
+        min-height: 640px;
+      }
+      h2 {
+        margin: 6px 0 12px;
+        font-size: 18px;
+      }
+      .section {
+        margin-bottom: 12px;
+      }
+      .drone-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 220px;
+        overflow: auto;
+        padding-right: 4px;
+      }
+      .drone {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .drone .meta {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .badge {
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(6, 182, 212, 0.12);
+        color: var(--accent);
+        font-weight: 600;
+      }
+      select,
+      input,
+      button {
+        font-size: 13px;
+        border-radius: 6px;
+        padding: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        background: transparent;
+        color: var(--white);
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .btn {
+        background: var(--accent);
+        color: #002;
+        cursor: pointer;
+        border: none;
+        padding: 10px 12px;
+        border-radius: 6px;
+        font-weight: 700;
+      }
+      .btn.secondary {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        color: var(--white);
+      }
+      .video-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .video-tile {
+        height: 120px;
+        background: #031324;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--muted);
+      }
+      footer {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 8px;
+      }
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .mission-panel {
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.01),
+          rgba(255, 255, 255, 0)
+        );
+        padding: 10px;
+        border-radius: 8px;
+      }
+      .waypoint-list {
+        max-height: 140px;
+        overflow: auto;
+        padding: 6px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .wp {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px;
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.02);
+      }
+      .warn {
+        color: #ffb703;
+        font-weight: 700;
+      }
+      .small {
+        font-size: 12px;
+      }
+      .status-inline {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .selected {
+        outline: 2px solid rgba(6, 182, 212, 0.4);
+        box-shadow: 0 0 12px rgba(6, 182, 212, 0.12);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="app">
+      <div class="left">
+        <div class="topbar">
+          <div>
+            <h2>Swarm Mission Planner</h2>
+            <div class="muted small">
+              Local UI — Offline-friendly • WebSocket endpoint configurable
+            </div>
+          </div>
+          <div class="status-inline">
+            <div class="muted small">Server:</div>
+            <div id="conn-status" class="muted small">Disconnected</div>
+          </div>
+        </div>
+
+        <div class="section mission-panel">
+          <label class="small muted">Connect to server (ws):</label>
+          <div class="row" style="margin-top: 6px">
+            <input id="ws-uri" value="ws://localhost:8080" style="flex: 1" />
+            <button id="btn-connect" class="btn">Connect</button>
+          </div>
+
+          <div style="margin-top: 10px" class="row">
+            <select id="mission-type" style="flex: 1">
+              <option value="patrol">Patrol</option>
+              <option value="defence">Defence</option>
+              <option value="search">Search</option>
+            </select>
+            <button id="btn-plan" class="btn secondary">Open Planner</button>
+          </div>
+
+          <div style="margin-top: 10px" class="row">
+            <input id="spacing" type="number" value="20" style="width: 80px" />
+            <div class="muted" style="align-self: center">Spacing (m)</div>
+            <input
+              id="duration"
+              type="number"
+              value="600"
+              style="width: 120px"
+            />
+            <div class="muted" style="align-self: center">Duration (s)</div>
+          </div>
+
+          <div style="margin-top: 10px" class="row">
+            <button id="btn-start" class="btn">Start Mission</button>
+            <button id="btn-stop" class="btn secondary">Stop</button>
+          </div>
+
+          <div style="margin-top: 10px">
+            <label class="small muted">Home (Base of Control):</label>
+            <div class="row" style="margin-top: 6px">
+              <input id="home-lat" placeholder="lat" />
+              <input id="home-lon" placeholder="lon" />
+              <button id="btn-set-home" class="btn secondary">Set Home</button>
+            </div>
+            <div class="muted small">
+              Or click <span class="warn">Set Home</span> then click map to
+              place home.
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3 style="margin: 6px 0">Connected Drones</h3>
+          <div class="drone-list" id="drone-list">
+            <!-- drone items injected here -->
+          </div>
+          <div style="margin-top: 8px" class="row">
+            <button id="btn-add-sim" class="btn secondary">
+              Add Sim Drone
+            </button>
+            <button id="btn-clear" class="btn secondary">Clear</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3 style="margin: 6px 0">Live Feeds</h3>
+          <div id="selected-drone-title" class="muted small">
+            Select a drone to see controls
+          </div>
+          <div class="video-grid" id="video-grid">
+            <div id="vt-1" class="video-tile">Feed 1</div>
+            <div id="vt-2" class="video-tile">Feed 2</div>
+            <div id="vt-3" class="video-tile">Feed 3</div>
+            <div id="vt-4" class="video-tile">Feed 4</div>
+          </div>
+          <div id="drone-controls" style="margin-top: 8px; display: none">
+            <div class="row" style="margin-bottom: 6px">
+              <button class="btn" id="cmd-land">Land</button>
+              <button class="btn" id="cmd-hover">Hover</button>
+            </div>
+            <div class="row" style="margin-bottom: 6px">
+              <button class="btn" id="cmd-speed-down">- Speed</button>
+              <button class="btn" id="cmd-speed-up">+ Speed</button>
+            </div>
+            <div class="row">
+              <input id="alt-input" placeholder="alt (m)" />
+              <button class="btn" id="cmd-set-alt">Set Alt</button>
+            </div>
+          </div>
+        </div>
+
+        <footer>
+          <div>
+            Click a drone on the map to open its control panel. The UI sends
+            JSON mission/control messages to the configured WS endpoint.
+          </div>
+        </footer>
+      </div>
+
+      <div class="map-wrap">
+        <div id="map"></div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      const drones = {};
+      let ws = null;
+      let map, drawLayer, waypointLayer, homeMarker, defenceRectLayer;
+      let currentMission = { type: "patrol", waypoints: [] };
+      let defenceDrawMode = false;
+      let defenceBoxStart = null;
+      let vehicles = {};
+      let selectedDroneId = null;
+      let missionRunning = false;
+
+      function initMap() {
+        map = L.map("map").setView([12.9716, 77.5946], 15);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+        }).addTo(map);
+        waypointLayer = L.layerGroup().addTo(map);
+        drawLayer = L.layerGroup().addTo(map);
+        defenceRectLayer = L.layerGroup().addTo(map);
+
+        map.on("click", function (e) {
+          const planningCheckbox = document.getElementById("planning");
+          const setHomeCheckbox = document.getElementById("set-home");
+          if (planningCheckbox && planningCheckbox.checked) {
+            addWaypoint(e.latlng);
+          } else if (setHomeCheckbox && setHomeCheckbox.checked) {
+            setHomeAt(e.latlng);
+          }
+        });
+
+        map.on("mousedown", function (e) {
+          if (defenceDrawMode) {
+            defenceBoxStart = e.latlng;
+          }
+        });
+        map.on("mouseup", function (e) {
+          if (defenceDrawMode && defenceBoxStart) {
+            const b = L.latLngBounds(defenceBoxStart, e.latlng);
+            drawDefenceBox(b);
+            defenceBoxStart = null;
+            defenceDrawMode = false;
+            const defBtn = document.getElementById("btn-defence-draw");
+            if (defBtn) defBtn.innerText = "Draw Defence Area";
+            alert("Defence area set");
+          }
+        });
+      }
+
+      function setHomeAt(latlng) {
+        if (homeMarker) map.removeLayer(homeMarker);
+        homeMarker = L.marker(latlng).addTo(drawLayer).bindPopup("Home");
+        document.getElementById("home-lat").value = latlng.lat.toFixed(6);
+        document.getElementById("home-lon").value = latlng.lng.toFixed(6);
+        const sh = document.getElementById("set-home");
+        if (sh) sh.checked = false;
+      }
+
+      function drawDefenceBox(bounds) {
+        defenceRectLayer.clearLayers();
+        L.rectangle(bounds, {
+          color: "#ff6b6b",
+          weight: 2,
+          fillOpacity: 0.08,
+        }).addTo(defenceRectLayer);
+      }
+
+      function addWaypoint(latlng) {
+        const id = "wp-" + Date.now();
+        currentMission.waypoints.push({
+          id,
+          lat: latlng.lat,
+          lon: latlng.lng,
+          alt: 30,
+          speed: 5,
+        });
+        renderWaypoints();
+      }
+
+      function renderWaypoints() {
+        waypointLayer.clearLayers();
+        currentMission.waypoints.forEach((wp, i) => {
+          const m = L.marker([wp.lat, wp.lon], { draggable: true }).addTo(
+            waypointLayer
+          );
+          m.bindTooltip("WP " + (i + 1), { permanent: true }).openTooltip();
+          m.on("dragend", (e) => {
+            wp.lat = e.target.getLatLng().lat;
+            wp.lon = e.target.getLatLng().lng;
+          });
+        });
+      }
+
+      function renderDrones() {
+        const list = document.getElementById("drone-list");
+        list.innerHTML = "";
+        Object.values(drones).forEach((d) => {
+          const el = document.createElement("div");
+          el.className = "drone";
+          el.innerHTML =
+            "<div class='meta'><div style='width:36px;height:36px;border-radius:999px;background:#052033;display:flex;align-items:center;justify-content:center;font-weight:700'>" +
+            d.id.split("-").pop() +
+            "</div><div style='display:flex;flex-direction:column'><div style='font-weight:700'>" +
+            d.id +
+            "</div><div class='muted small'>Bat: " +
+            Math.round(d.battery) +
+            "% • RSSI: " +
+            d.rssi +
+            "</div></div></div><div style='display:flex;flex-direction:column;gap:6px'><select data-id='" +
+            d.id +
+            "' class='role-select'><option value='patrol' " +
+            (d.role === "patrol" ? "selected" : "") +
+            ">Patrol</option><option value='scout' " +
+            (d.role === "scout" ? "selected" : "") +
+            ">Scout</option><option value='leader' " +
+            (d.role === "leader" ? "selected" : "") +
+            ">Leader</option></select><div style='display:flex;gap:6px'><button class='btn' data-id='" +
+            d.id +
+            "' onclick='focusDrone(" +
+            "'" +
+            d.id +
+            "'" +
+            ")'>Focus</button></div></div>";
+          list.appendChild(el);
+        });
+        document.querySelectorAll(".role-select").forEach(
+          (s) =>
+            (s.onchange = (e) => {
+              const id = e.target.getAttribute("data-id");
+              drones[id].role = e.target.value;
+              sendRoleUpdate(id, e.target.value);
+            })
+        );
+      }
+
+      function focusDrone(id) {
+        const d = drones[id];
+        if (!d) return;
+        map.setView([d.lat, d.lon], 18);
+        openDronePanel(id);
+      }
+
+      function addSimDrone() {
+        const id =
+          "drone-" +
+          (Object.keys(drones).length + 1).toString().padStart(2, "0");
+        const latlng = map.getCenter();
+        const d = {
+          id,
+          lat: latlng.lat + (Math.random() - 0.5) / 500,
+          lon: latlng.lng + (Math.random() - 0.5) / 500,
+          battery: 80,
+          rssi: -60,
+          role: "patrol",
+          speed: 5,
+          alt: 30,
+          waypoints: [],
+          currentWpIndex: 0,
+        };
+        drones[id] = d;
+        d.marker = L.circleMarker([d.lat, d.lon], {
+          radius: 8,
+          fillColor: "#06b6d4",
+          color: "#003",
+          weight: 1,
+        })
+          .addTo(drawLayer)
+          .bindPopup(id);
+        d.marker.on("click", () => {
+          focusDrone(id);
+        });
+        renderDrones();
+      }
+
+      function clearDrones() {
+        Object.values(drones).forEach((d) => {
+          if (d.marker) map.removeLayer(d.marker);
+        });
+        Object.keys(drones).forEach((k) => delete drones[k]);
+        renderDrones();
+      }
+
+      function startMission() {
+        if (Object.keys(drones).length === 0) {
+          alert("No drones connected");
+          return;
+        }
+        const mission_type = document.getElementById("mission-type").value;
+        const spacing =
+          parseFloat(document.getElementById("spacing").value) || 20;
+        const duration =
+          parseInt(document.getElementById("duration").value) || 600;
+        const droneIds = Object.keys(drones);
+        const assignments = {};
+        if (mission_type === "patrol") {
+          if (currentMission.waypoints.length === 0) {
+            alert(
+              "Add at least one waypoint on the map while Planner is open."
+            );
+            return;
+          }
+          const first = currentMission.waypoints[0];
+          const k = droneIds.length;
+          const centroidLat = first.lat;
+          const centroidLon = first.lon;
+          for (let i = 0; i < k; i++) {
+            const theta = (2 * Math.PI * i) / k;
+            const R = spacing;
+            const dLat = (R / 111000) * Math.cos(theta);
+            const dLon =
+              (R / (111000 * Math.cos((centroidLat * Math.PI) / 180))) *
+              Math.sin(theta);
+            const startLat = centroidLat + dLat;
+            const startLon = centroidLon + dLon;
+            const shifted = currentMission.waypoints.map((wp) => ({
+              lat: wp.lat + (startLat - first.lat),
+              lon: wp.lon + (startLon - first.lon),
+              alt: wp.alt,
+              speed: wp.speed,
+            }));
+            assignments[droneIds[i]] = shifted;
+            drones[droneIds[i]].waypoints = shifted;
+            drones[droneIds[i]].currentWpIndex = 0;
+            drones[droneIds[i]].speed =
+              shifted[0].speed || drones[droneIds[i]].speed;
+          }
+        } else if (mission_type === "defence") {
+          const rectLayer = defenceRectLayer.getLayers()[0];
+          if (!rectLayer) {
+            alert('Draw a defence area first using "Draw Defence Area" button');
+            return;
+          }
+          const bounds = rectLayer.getBounds();
+          const center = bounds.getCenter();
+          const k = droneIds.length;
+          for (let i = 0; i < k; i++) {
+            const theta = (2 * Math.PI * i) / k;
+            const R = spacing;
+            const dLat = (R / 111000) * Math.cos(theta);
+            const dLon =
+              (R / (111000 * Math.cos((center.lat * Math.PI) / 180))) *
+              Math.sin(theta);
+            const lat = center.lat + dLat;
+            const lon = center.lng + dLon;
+            assignments[droneIds[i]] = [{ lat, lon, alt: 50, speed: 3 }];
+            drones[droneIds[i]].waypoints = assignments[droneIds[i]];
+            drones[droneIds[i]].currentWpIndex = 0;
+            drones[droneIds[i]].speed = 3;
+          }
+        } else if (mission_type === "search") {
+          const bounds = map.getBounds();
+          const latRange = bounds.getNorth() - bounds.getSouth();
+          const k = droneIds.length;
+          for (let i = 0; i < k; i++) {
+            const lat = bounds.getSouth() + (latRange * (i + 0.5)) / k;
+            const lon =
+              bounds.getWest() + (bounds.getEast() - bounds.getWest()) * 0.5;
+            assignments[droneIds[i]] = [{ lat, lon, alt: 40, speed: 5 }];
+            drones[droneIds[i]].waypoints = assignments[droneIds[i]];
+            drones[droneIds[i]].currentWpIndex = 0;
+            drones[droneIds[i]].speed = 5;
+          }
+        }
+        missionRunning = true;
+        document.getElementById("btn-start").innerText = "Mission Running...";
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(
+            JSON.stringify({
+              type: "mission_start",
+              mission_type,
+              params: { spacing_m: spacing, duration_s: duration, assignments },
+            })
+          );
+        }
+      }
+
+      function stopMission() {
+        missionRunning = false;
+        const btn = document.getElementById("btn-start");
+        if (btn) btn.innerText = "Start Mission";
+        if (ws && ws.readyState === WebSocket.OPEN)
+          ws.send(JSON.stringify({ type: "mission_stop", ts: Date.now() }));
+        alert("Mission stopped");
+      }
+
+      function simulateStep() {
+        if (!missionRunning) return;
+        const dt = 1;
+        Object.values(drones).forEach((d) => {
+          if (!d.waypoints || d.waypoints.length === 0) return;
+          const idx =
+            typeof d.currentWpIndex === "number" ? d.currentWpIndex : 0;
+          const wp = d.waypoints[idx];
+          const dist = haversineMeters(d.lat, d.lon, wp.lat, wp.lon);
+          const speed = d.speed || wp.speed || 5;
+          if (dist < Math.max(1, speed * dt)) {
+            d.lat = wp.lat;
+            d.lon = wp.lon;
+            d.currentWpIndex = (idx + 1) % d.waypoints.length;
+          } else {
+            const bearing = bearingBetween(d.lat, d.lon, wp.lat, wp.lon);
+            const moved = speed * dt;
+            const newPos = moveLatLon(d.lat, d.lon, moved, bearing);
+            d.lat = newPos[0];
+            d.lon = newPos[1];
+          }
+          if (d.marker) d.marker.setLatLng([d.lat, d.lon]);
+        });
+        Object.values(vehicles).forEach((v) => {
+          const idx = v.idx;
+          const route = v.route;
+          const next = route[(idx + 1) % route.length];
+          const dist = haversineMeters(v.lat, v.lon, next.lat, next.lon);
+          const speed = v.speed;
+          if (dist < speed * dt) {
+            v.lat = next.lat;
+            v.lon = next.lon;
+            v.idx = (idx + 1) % route.length;
+          } else {
+            const b = bearingBetween(v.lat, v.lon, next.lat, next.lon);
+            const np = moveLatLon(v.lat, v.lon, speed * dt, b);
+            v.lat = np[0];
+            v.lon = np[1];
+          }
+          if (v.marker) v.marker.setLatLng([v.lat, v.lon]);
+        });
+      }
+
+      function createVehicles() {
+        const c = map.getCenter();
+        for (let i = 0; i < 3; i++) {
+          const id = "veh-" + (i + 1);
+          const route = [
+            { lat: c.lat + 0.002, lon: c.lng - 0.003 },
+            { lat: c.lat + 0.002, lon: c.lng + 0.003 },
+            { lat: c.lat - 0.002, lon: c.lng + 0.003 },
+            { lat: c.lat - 0.002, lon: c.lng - 0.003 },
+          ];
+          const v = {
+            id,
+            lat: route[0].lat,
+            lon: route[0].lon,
+            idx: 0,
+            route,
+            speed: 6,
+          };
+          vehicles[id] = v;
+          v.marker = L.rectangle(
+            [
+              [v.lat - 0.00005, v.lon - 0.0001],
+              [v.lat + 0.00005, v.lon + 0.0001],
+            ],
+            { color: "#ffd166" }
+          ).addTo(drawLayer);
+        }
+      }
+
+      function openDronePanel(id) {
+        selectedDroneId = id;
+        const title = document.getElementById("selected-drone-title");
+        if (title) title.innerText = "Selected: " + id;
+        const panel = document.getElementById("drone-controls");
+        if (panel) panel.style.display = "block";
+        enlargeFeedFor(id);
+      }
+      function enlargeFeedFor(id) {
+        const t1 = document.getElementById("vt-1");
+        if (t1) {
+          t1.innerText = id + " (Live feed)";
+          t1.classList.add("selected");
+        }
+      }
+
+      function sendDroneCommand(id, cmd, params = {}) {
+        const m = {
+          type: "drone_cmd",
+          drone_id: id,
+          cmd,
+          params,
+          ts: Date.now(),
+        };
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
+        console.log("CMD", m);
+      }
+
+      function haversineMeters(lat1, lon1, lat2, lon2) {
+        const R = 6371000;
+        const toRad = Math.PI / 180;
+        const dLat = (lat2 - lat1) * toRad;
+        const dLon = (lon2 - lon1) * toRad;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * toRad) *
+            Math.cos(lat2 * toRad) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+      }
+      function bearingBetween(lat1, lon1, lat2, lon2) {
+        const toRad = Math.PI / 180;
+        const toDeg = 180 / Math.PI;
+        const y = Math.sin((lon2 - lon1) * toRad) * Math.cos(lat2 * toRad);
+        const x =
+          Math.cos(lat1 * toRad) * Math.sin(lat2 * toRad) -
+          Math.sin(lat1 * toRad) *
+            Math.cos(lat2 * toRad) *
+            Math.cos((lon2 - lon1) * toRad);
+        return (Math.atan2(y, x) * toDeg + 360) % 360;
+      }
+      function moveLatLon(lat, lon, meters, bearing) {
+        const R = 6378137;
+        const delta = meters / R;
+        const theta = (bearing * Math.PI) / 180;
+        const phi1 = (lat * Math.PI) / 180;
+        const lambda1 = (lon * Math.PI) / 180;
+        const phi2 = Math.asin(
+          Math.sin(phi1) * Math.cos(delta) +
+            Math.cos(phi1) * Math.sin(delta) * Math.cos(theta)
+        );
+        const lambda2 =
+          lambda1 +
+          Math.atan2(
+            Math.sin(theta) * Math.sin(delta) * Math.cos(phi1),
+            Math.cos(delta) - Math.sin(phi1) * Math.sin(phi2)
+          );
+        return [(phi2 * 180) / Math.PI, (lambda2 * 180) / Math.PI];
+      }
+
+      function connectWS(uri) {
+        if (ws) ws.close();
+        ws = new WebSocket(uri);
+        const status = document.getElementById("conn-status");
+        if (status) status.innerText = "Connecting...";
+        ws.onopen = () => {
+          if (status) status.innerText = "Connected";
+          console.log("WS open");
+        };
+        ws.onclose = () => {
+          if (status) status.innerText = "Disconnected";
+          console.log("WS closed");
+        };
+        ws.onerror = (e) => {
+          if (status) status.innerText = "Error";
+          console.error("WS error", e);
+        };
+        ws.onmessage = (ev) => {
+          try {
+            const d = JSON.parse(ev.data);
+            handleIncoming(d);
+          } catch (e) {
+            console.warn("non-json", ev.data);
+          }
+        };
+      }
+
+      function handleIncoming(msg) {
+        if (msg && msg.type === "telemetry") {
+          if (!drones[msg.drone_id]) {
+            drones[msg.drone_id] = {
+              id: msg.drone_id,
+              battery: msg.battery || 80,
+              rssi: msg.rssi || -60,
+              role: "patrol",
+              lat: msg.pose.lat,
+              lon: msg.pose.lon,
+              speed: msg.speed || 5,
+              alt: msg.pose.alt || 30,
+              waypoints: [],
+              currentWpIndex: 0,
+            };
+            drones[msg.drone_id].marker = L.circleMarker(
+              [msg.pose.lat, msg.pose.lon],
+              { radius: 8, fillColor: "#06b6d4", color: "#003", weight: 1 }
+            )
+              .addTo(drawLayer)
+              .bindPopup(msg.drone_id);
+            drones[msg.drone_id].marker.on("click", () => {
+              focusDrone(msg.drone_id);
+            });
+          } else {
+            const d = drones[msg.drone_id];
+            d.lat = msg.pose.lat;
+            d.lon = msg.pose.lon;
+            d.battery = msg.battery || d.battery;
+            d.rssi = msg.rssi || d.rssi;
+            if (d.marker) d.marker.setLatLng([d.lat, d.lon]);
+          }
+          renderDrones();
+        }
+      }
+
+      function sendRoleUpdate(id, role) {
+        const msg = { type: "assign_role", drone_id: id, role };
+        if (ws && ws.readyState === WebSocket.OPEN)
+          ws.send(JSON.stringify(msg));
+        console.log("Role update", msg);
+      }
+
+      window.onload = () => {
+        initMap();
+        document.getElementById("btn-add-sim").onclick = addSimDrone;
+        document.getElementById("btn-clear").onclick = clearDrones;
+        document.getElementById("btn-start").onclick = startMission;
+        document.getElementById("btn-stop").onclick = stopMission;
+        document.getElementById("btn-connect").onclick = () => {
+          const uri = document.getElementById("ws-uri").value;
+          connectWS(uri);
+        };
+        document.getElementById("btn-set-home").onclick = () => {
+          const lat = parseFloat(document.getElementById("home-lat").value);
+          const lon = parseFloat(document.getElementById("home-lon").value);
+          if (isNaN(lat) || isNaN(lon)) {
+            alert("Enter valid lat/lon or click on map with Set Home checked");
+            return;
+          }
+          setHomeAt({ lat, lng: lon });
+        };
+        document.getElementById("btn-plan").onclick = () => {
+          const planning = document.getElementById("planning");
+          if (planning && planning.checked) {
+            planning.remove();
+            document.getElementById("btn-plan").innerText = "Open Planner";
+          } else {
+            const cb = document.createElement("input");
+            cb.type = "checkbox";
+            cb.id = "planning";
+            cb.checked = true;
+            cb.style.marginLeft = "6px";
+            document.getElementById("btn-plan").innerText = "Close Planner";
+            document.getElementById("btn-plan").parentNode.appendChild(cb);
+            alert(
+              "Planner open: click on map to add waypoints. Drag markers to edit."
+            );
+          }
+        };
+        const sh = document.createElement("input");
+        sh.type = "checkbox";
+        sh.id = "set-home";
+        sh.style.marginLeft = "6px";
+        document.getElementById("btn-set-home").parentNode.appendChild(sh);
+        const defBtn = document.createElement("button");
+        defBtn.id = "btn-defence-draw";
+        defBtn.className = "btn secondary";
+        defBtn.innerText = "Draw Defence Area";
+        defBtn.onclick = () => {
+          defenceDrawMode = !defenceDrawMode;
+          defBtn.innerText = defenceDrawMode
+            ? "Drawing... (drag on map)"
+            : "Draw Defence Area";
+        };
+        document.getElementById("btn-start").parentNode.appendChild(defBtn);
+        document.getElementById("cmd-land").onclick = () => {
+          if (selectedDroneId) sendDroneCommand(selectedDroneId, "land");
+          else alert("Select a drone");
+        };
+        document.getElementById("cmd-hover").onclick = () => {
+          if (selectedDroneId) sendDroneCommand(selectedDroneId, "hover");
+          else alert("Select a drone");
+        };
+        document.getElementById("cmd-speed-down").onclick = () => {
+          if (selectedDroneId) {
+            drones[selectedDroneId].speed = Math.max(
+              1,
+              (drones[selectedDroneId].speed || 5) - 1
+            );
+            sendDroneCommand(selectedDroneId, "set_speed", {
+              speed: drones[selectedDroneId].speed,
+            });
+          } else alert("Select a drone");
+        };
+        document.getElementById("cmd-speed-up").onclick = () => {
+          if (selectedDroneId) {
+            drones[selectedDroneId].speed =
+              (drones[selectedDroneId].speed || 5) + 1;
+            sendDroneCommand(selectedDroneId, "set_speed", {
+              speed: drones[selectedDroneId].speed,
+            });
+          } else alert("Select a drone");
+        };
+        document.getElementById("cmd-set-alt").onclick = () => {
+          const v = parseFloat(document.getElementById("alt-input").value);
+          if (selectedDroneId && !isNaN(v)) {
+            drones[selectedDroneId].alt = v;
+            sendDroneCommand(selectedDroneId, "set_alt", { alt: v });
+          } else alert("Select a drone and enter alt");
+        };
+        createVehicles();
+        setInterval(simulateStep, 1000);
+        setInterval(renderDrones, 500);
+      };
+    </script>
+  </body>
+</html>
