@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drone Swarm Dashboard</title>
+
+    <!-- Axios -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <!-- Leaflet Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0d1117 0%, #1a1f2e 100%);
+            color: #fff;
+            font-family: "Poppins", sans-serif;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ===== LOGIN PAGE ===== */
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(135deg, #0d1117 0%, #1a1f2e 100%);
+        }
+
+        .login-box {
+            background: rgba(22, 27, 34, 0.95);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 0 40px rgba(0, 224, 255, 0.4);
+            border: 2px solid #00e0ff;
+            width: 400px;
+            text-align: center;
+        }
+
+        .login-box h1 {
+            color: #00e0ff;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .login-box p {
+            color: #aaa;
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .input-group label {
+            display: block;
+            color: #00e0ff;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            background: #0d1117;
+            border: 2px solid #00e0ff;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            transition: 0.3s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #00ffcc;
+            box-shadow: 0 0 10px rgba(0, 224, 255, 0.3);
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: #00e0ff;
+            border: none;
+            color: #000;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: 0.3s;
+        }
+
+        .login-btn:hover {
+            background: #00b3cc;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 224, 255, 0.4);
+        }
+
+        /* ===== DASHBOARD ===== */
+        .dashboard {
+            display: none;
+            height: 100vh;
+            flex-direction: column;
+        }
+
+        header {
+            background: rgba(22, 27, 34, 0.95);
+            padding: 15px 30px;
+            border-bottom: 2px solid #00e0ff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 224, 255, 0.2);
+        }
+
+        .header-left h1 {
+            color: #00e0ff;
+            font-size: 24px;
+            margin-bottom: 3px;
+        }
+
+        .header-left p {
+            color: #aaa;
+            font-size: 12px;
+        }
+
+        .header-right {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .connected-status {
+            background: rgba(0, 224, 255, 0.1);
+            border: 2px solid #00e0ff;
+            padding: 8px 20px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background: #00ff00;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .logout-btn {
+            background: #ff3333;
+            border: none;
+            color: #fff;
+            padding: 8px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: #cc0000;
+        }
+
+        main {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 15px;
+            padding: 15px;
+            height: calc(100vh - 80px);
+            overflow: hidden;
+        }
+
+        .map-section {
+            grid-column: 1 / 2;
+            grid-row: 1 / 3;
+            background: rgba(22, 27, 34, 0.95);
+            border-radius: 12px;
+            padding: 15px;
+            border: 2px solid #00e0ff;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .map-section h2 {
+            color: #00e0ff;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .map-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .map-controls label {
+            color: #00e0ff;
+            font-size: 14px;
+        }
+
+        select {
+            background: #0d1117;
+            color: #00e0ff;
+            border: 2px solid #00e0ff;
+            border-radius: 6px;
+            padding: 6px 12px;
+            cursor: pointer;
+        }
+
+        #map {
+            flex: 1;
+            background: #0c1015;
+            border: 2px solid #00e0ff;
+            border-radius: 10px;
+        }
+
+        .control-panel {
+            grid-column: 2 / 3;
+            grid-row: 1 / 2;
+            background: rgba(22, 27, 34, 0.95);
+            border-radius: 12px;
+            padding: 15px;
+            border: 2px solid #00e0ff;
+        }
+
+        .control-panel h2 {
+            color: #00e0ff;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .buttons button {
+            background: #00e0ff;
+            border: none;
+            color: #000;
+            font-weight: bold;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 13px;
+        }
+
+        .buttons button:hover {
+            background: #00b3cc;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 224, 255, 0.4);
+        }
+
+        .video-section {
+            grid-column: 2 / 3;
+            grid-row: 2 / 3;
+            background: rgba(22, 27, 34, 0.95);
+            border-radius: 12px;
+            padding: 15px;
+            border: 2px solid #00e0ff;
+        }
+
+        .video-section h2 {
+            color: #00e0ff;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            height: calc(100% - 40px);
+        }
+
+        .video-box {
+            background: rgba(13, 17, 23, 0.8);
+            border-radius: 8px;
+            padding: 8px;
+            text-align: center;
+            border: 2px solid #00e0ff;
+        }
+
+        .video-box h3 {
+            color: #00e0ff;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+
+        .video-box img {
+            width: 100%;
+            height: calc(100% - 30px);
+            border-radius: 6px;
+            object-fit: cover;
+            border: 1px solid #00e0ff;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ===== LOGIN PAGE ===== -->
+    <div class="login-container" id="loginPage">
+        <div class="login-box">
+            <h1>Drone Swarm System</h1>
+            <p>Enter your credentials to access the dashboard</p>
+            <form id="loginForm">
+                <div class="input-group">
+                    <label>Username</label>
+                    <input type="text" id="username" placeholder="Enter username" required>
+                </div>
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="password" id="password" placeholder="Enter password" required>
+                </div>
+                <button type="submit" class="login-btn">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== DASHBOARD ===== -->
+    <div class="dashboard" id="dashboard">
+        <header>
+            <div class="header-left">
+                <h1>Drone Swarm Monitoring Dashboard</h1>
+                <p>Live Map • Real-time Controls • Camera Feeds</p>
+            </div>
+            <div class="header-right">
+                <div class="connected-status">
+                    <div class="status-dot"></div>
+                    <span id="connectedCount">3 Drones Connected</span>
+                </div>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <main>
+            <!-- ===== MAP SECTION ===== -->
+            <div class="map-section">
+                <h2>Map View</h2>
+                <div class="map-controls">
+                    <label for="droneSelect">Select Drone:</label>
+                    <select id="droneSelect">
+                        <option value="2">Drone 1</option>
+                        <option value="3">Drone 2</option>
+                        <option value="4">Drone 3</option>
+                    </select>
+                    <span style="color: #aaa; font-size: 12px;">💡 Click on map to move drone</span>
+                </div>
+                <div id="map"></div>
+            </div>
+
+            <!-- ===== CONTROL PANEL ===== -->
+            <div class="control-panel">
+                <h2>Drone Controls</h2>
+                <div class="buttons">
+                    <button onclick="sendCommand('takeoff')">Take Off</button>
+                    <button onclick="sendCommand('land')">Land</button>
+                    <button onclick="sendCommand('forward')">Forward</button>
+                    <button onclick="sendCommand('backward')">Backward</button>
+                    <button onclick="sendCommand('left')">Left</button>
+                    <button onclick="sendCommand('right')">Right</button>
+                    <button onclick="sendCommand('stop')">Stop</button>
+                </div>
+            </div>
+
+            <!-- ===== VIDEO SECTION ===== -->
+            <div class="video-section">
+                <h2>Camera Feeds</h2>
+                <div class="video-grid">
+                    <div class="video-box">
+                        <h3>Drone 1</h3>
+                        <img src="/video/1" alt="Drone 1 Feed">
+                    </div>
+                    <div class="video-box">
+                        <h3>Drone 2</h3>
+                        <img src="/video/2" alt="Drone 2 Feed">
+                    </div>
+                    <div class="video-box">
+                        <h3>Drone 3</h3>
+                        <img src="/video/3" alt="Drone 3 Feed">
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // ===== LOGIN FUNCTIONALITY =====
+        document.getElementById('loginForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (username === 'admin' && password === '1234') {
+                document.getElementById('loginPage').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'flex';
+                initializeDashboard();
+            } else {
+                alert('❌ Invalid credentials! Please try again.');
+            }
+        });
+
+        function logout() {
+            document.getElementById('dashboard').style.display = 'none';
+            document.getElementById('loginPage').style.display = 'flex';
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+        }
+
+        // ===== DASHBOARD FUNCTIONALITY =====
+        let mapInstance = null;
+
+        function initializeDashboard() {
+            mapInstance = L.map('map').setView([20, 0], 2);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(mapInstance);
+
+            const droneMarkers = {};
+
+            async function updateDroneLocations() {
+                try {
+                    const res = await fetch('/locations');
+                    const data = await res.json();
+
+                    // Only keep drones 2,3,4
+                    const filteredDrones = data.drones.filter(d => d.id !== 1);
+
+                    filteredDrones.forEach(drone => {
+                        const id = drone.id;
+                        const latlng = [drone.lat, drone.lon];
+
+                        if (droneMarkers[id]) {
+                            droneMarkers[id].setLatLng(latlng);
+                        } else {
+                            const marker = L.marker(latlng)
+                                .addTo(mapInstance)
+                                .bindPopup(`Drone ${id}`);
+                            droneMarkers[id] = marker;
+                        }
+                    });
+
+                    document.getElementById('connectedCount').textContent = `${filteredDrones.length} Drones Connected`;
+                } catch (err) {
+                    console.error('❌ Error fetching drone locations:', err);
+                }
+            }
+
+            setInterval(updateDroneLocations, 3000);
+            updateDroneLocations();
+
+            const droneSelect = document.getElementById('droneSelect');
+            mapInstance.on('click', async function (e) {
+                const selectedId = parseInt(droneSelect.value);
+                const { lat, lng } = e.latlng;
+
+                if (droneMarkers[selectedId]) {
+                    droneMarkers[selectedId].setLatLng([lat, lng]).bindPopup(`Drone ${selectedId}`).openPopup();
+                } else {
+                    droneMarkers[selectedId] = L.marker([lat, lng])
+                        .addTo(mapInstance)
+                        .bindPopup(`Drone ${selectedId}`)
+                        .openPopup();
+                }
+
+                try {
+                    await axios.post('/update_location', {
+                        id: selectedId,
+                        lat: lat,
+                        lon: lng
+                    });
+                    console.log(`✅ Updated Drone ${selectedId} to [${lat}, ${lng}]`);
+                } catch (err) {
+                    console.error('❌ Error updating location:', err);
+                }
+            });
+        }
+
+        function sendCommand(cmd) {
+            axios.post('/command', { action: cmd })
+                .then(res => console.log('✅ Command sent:', res.data))
+                .catch(err => console.error('❌ Error:', err));
+        }
+    </script>
+</body>
+
+</html>
