@@ -25,9 +25,9 @@ This project focuses on building a **hybrid swarm control framework** that allow
 
 | Profile | GitHub |
 |----------|--------|
-| **Boss (Project Lead)** | [@jaz0xd](https://github.com/jaz0xd) |
+| **Siraj (Co-lead)** | [@jaz0xd](https://github.com/jaz0xd) |
 | **Akshaya** | [@akshaya1516](https://github.com/akshaya1516) |
-| **Sandy** | [@S-A-N-D-Y-004](https://github.com/S-A-N-D-Y-004) |
+| **Sandeep** | [@S-A-N-D-Y-004](https://github.com/S-A-N-D-Y-004) |
 | **Thiyagu** | [@Thiyagusmks](https://github.com/Thiyagusmks) |
 
 ### 🧑‍💻 Contributor Avatars
