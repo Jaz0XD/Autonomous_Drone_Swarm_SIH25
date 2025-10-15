@@ -19,6 +19,27 @@ This project focuses on building a **hybrid swarm control framework** that allow
 
 ---
 
+## 👥 Collaborators
+
+> Huge thanks to our amazing team for their dedication and contributions 🚀
+
+| Profile | GitHub |
+|----------|--------|
+| **Boss (Project Lead)** | [@jaz0xd](https://github.com/jaz0xd) |
+| **Akshaya** | [@akshaya1516](https://github.com/akshaya1516) |
+| **Sandy** | [@S-A-N-D-Y-004](https://github.com/S-A-N-D-Y-004) |
+| **Thiyagu** | [@Thiyagusmks](https://github.com/Thiyagusmks) |
+
+### 🧑‍💻 Contributor Avatars
+<p align="center">
+  <a href="https://github.com/jaz0xd"><img src="https://avatars.githubusercontent.com/jaz0xd" width="70" height="70" style="border-radius:50%;margin:5px;"></a>
+  <a href="https://github.com/akshaya1516"><img src="https://avatars.githubusercontent.com/akshaya1516" width="70" height="70" style="border-radius:50%;margin:5px;"></a>
+  <a href="https://github.com/S-A-N-D-Y-004"><img src="https://avatars.githubusercontent.com/S-A-N-D-Y-004" width="70" height="70" style="border-radius:50%;margin:5px;"></a>
+  <a href="https://github.com/Thiyagusmks"><img src="https://avatars.githubusercontent.com/Thiyagusmks" width="70" height="70" style="border-radius:50%;margin:5px;"></a>
+</p>
+
+---
+
 ## 🛰️ Show Your Support
 
 If you found this project interesting, give it a ⭐ and follow the repository for updates!
